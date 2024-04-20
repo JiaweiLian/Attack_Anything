@@ -181,7 +181,7 @@ class PatchTrainer(object):
                     optimizer.zero_grad()
                     adv_patch_cpu.data.clamp_(0, 1)  # keep patch in image range
 
-                    # # draw boxes on adversarial example (yolo)
+                    # # draw boxes on adversarial example for yolo
                     # hide_conf = False
                     # hide_labels = False
                     # names = self.model.names
@@ -205,7 +205,7 @@ class PatchTrainer(object):
                                 # "mask_batch_show": wandb.Image(mask_batch_show, caption="patch{}".format(iteration)),  # Show adversarial example
                                 # "adv_patch_show": wandb.Image(adv_patch_show, caption="patch{}".format(iteration)),  # Show adversarial example
                                 # "adv_patch_resized_show": wandb.Image(adv_patch_resized_show, caption="patch{}".format(iteration)),  # Show adversarial example
-                                "adversarial_example_show": wandb.Image(adversarial_example_show_ndarray, caption="patch{}".format(iteration)),  ###############################
+                                # "adversarial_example_show": wandb.Image(adversarial_example_show_ndarray, caption="patch{}".format(iteration)),  ###############################
                                 # "adversarial_example_padded_show": wandb.Image(adversarial_example_padded_show, caption="patch{}".format(iteration)),  # Show adversarial example
                                 # "adversarial_example_resized_show": wandb.Image(adversarial_example_resized_show, caption="patch{}".format(iteration)),  # Show adversarial example
 
