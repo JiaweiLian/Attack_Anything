@@ -20,7 +20,7 @@ from median_pool import MedianPool2d
 from utils_yolov5.general import non_max_suppression
 
 print('starting test read')
-im = Image.open('/home/jiawei/adversarial-yolo/data/horse.jpg').convert('RGB')
+im = Image.open('./data/horse.jpg').convert('RGB')
 print('img read!')
 
 

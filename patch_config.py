@@ -19,12 +19,12 @@ class BaseConfig(object):
         """
         Set the defaults.
         """
-        # self.img_dir = "/home/jiawei/datasets/coco/train2017_objects"
-        # self.mask_dir = "/home/jiawei/datasets/coco/train2017_mask"
-        # self.img_dir = "/home/jiawei/datasets/AA/car/clean360"
-        # self.mask_dir = "/home/jiawei/datasets/AA/car/mask360"
-        self.img_dir = "/home/jiawei/datasets/AA/mix/clean360"
-        self.mask_dir = "/home/jiawei/datasets/AA/mix/mask360"
+        self.img_dir = "../Datasets/coco_train2017_extracted_objects"
+        self.mask_dir = "../Datasets/coco_train2017_labels_mask_jpg"
+        # self.img_dir = "../datasets/AA/car/clean360"
+        # self.mask_dir = "../datasets/AA/car/mask360"
+        # self.img_dir = "../datasets/AA/mix/clean360"
+        # self.mask_dir = "../datasets/AA/mix/mask360"
         self.printfile = "non_printability/30values.txt"
         self.patch_size = 1024
         self.start_learning_rate = 0.03
@@ -52,8 +52,8 @@ class yolov3(BaseConfig):
         super().__init__()
         self.patch_name = 'ObjectOnlyPaper'
         self.batch_size = 4
-        self.weights_yolov3 = "/home/jiawei/yolov3-master/yolov3.pt"
-        self.data = '/home/jiawei/yolov3-master/data/coco.yaml'
+        self.weights_yolov3 = "../yolov3-master/yolov3.pt"
+        self.data = '../yolov3-master/data/coco.yaml'
         self.device = select_device('')
         self.model = DetectMultiBackend_yolov3(self.weights_yolov3,
                                                device=self.device,
@@ -157,8 +157,8 @@ class yolov5x(BaseConfig):
         super().__init__()
         self.batch_size = 4
         self.patch_name = 'ObjectOnlyPaper'
-        self.weights_yolov5 = "/home/jiawei/models/detectors/yolov5x.pt"
-        self.data = '/home/jiawei/yolov5/data/coco.yaml'
+        self.weights_yolov5 = "../models/detectors/yolov5x.pt"
+        self.data = '../yolov5/data/coco.yaml'
         self.device = select_device('')
         self.model = DetectMultiBackend(self.weights_yolov5,
                                         device=self.device,
@@ -197,7 +197,7 @@ class ssd(BaseConfig):
         self.batch_size = 10
         self.patch_name = 'ObjectOnlyPaper'
         self.config_file = 'configs/ssd/ssdlite_mobilenetv2_scratch_600e_coco.py'
-        self.checkpoint_file = "/home/jiawei/models/detectors/ssdlite_mobilenetv2_scratch_600e_coco_20210629_110627-974d9307.pth"  # For COCO
+        self.checkpoint_file = "../Models/detectors/ssdlite_mobilenetv2_scratch_600e_coco_20210629_110627-974d9307.pth"  # For COCO
         self.device = 'cuda:0'
         self.model = init_detector(self.config_file, self.checkpoint_file, device=self.device)
         self.InferenceDetector = InferenceDetector()
@@ -214,7 +214,7 @@ class swin(BaseConfig):
 
         self.patch_name = 'ObjectOnlyPaper'
         self.config_file = 'configs/swin/mask_rcnn_swin-t-p4-w7_fpn_fp16_ms-crop-3x_coco.py'
-        self.checkpoint_file = "/home/jiawei/models/object_detectors/mask_rcnn_swin-t-p4-w7_fpn_fp16_ms-crop-3x_coco_20210908_165006-90a4008c.pth"  # COCO
+        self.checkpoint_file = "../models/object_detectors/mask_rcnn_swin-t-p4-w7_fpn_fp16_ms-crop-3x_coco_20210908_165006-90a4008c.pth"  # COCO
         self.batch_size = 6
         self.device = 'cuda:0'
         self.model = init_detector(self.config_file, self.checkpoint_file, device=self.device)

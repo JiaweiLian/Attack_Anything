@@ -1,0 +1,18 @@
+
+
+
+
+
+
+
+
+
+Running epoch 0:   0%|▏                                                     | 36/11727 [00:23<2:06:28,  1.54it/s]
+Traceback (most recent call last):
+  File "train.py", line 288, in <module>
+    main()
+  File "train.py", line 284, in main
+    trainer.train()
+  File "train.py", line 112, in train
+    total=self.epoch_length):
+KeyboardInterrupt

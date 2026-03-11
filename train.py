@@ -22,7 +22,7 @@ import os
 import pandas as pd
 import wandb
 import warnings
-from ultralytics.utils.plotting import Annotator, colors, save_one_box
+# from ultralytics.utils.plotting import Annotator, colors, save_one_box
 
 warnings.filterwarnings("ignore")
 
@@ -72,8 +72,8 @@ class PatchTrainer(object):
         adv_patch_cpu = self.generate_patch("gray")
         adv_patch_cpu_original = self.generate_patch("gray")
 
-        adv_patch_mask_cpu = self.read_image("/home/jiawei/adversarial-yolo/patches/patch_AAAI/grid_mask_1024.png")
-        adv_patch_reversed_mask_cpu = self.read_image("/home/jiawei/adversarial-yolo/patches/patch_AAAI/grid_mask_reverse_1024.png")
+        adv_patch_mask_cpu = self.read_image("./patches/patch_AAAI/grid_mask_1024.png")
+        adv_patch_reversed_mask_cpu = self.read_image("./patches/patch_AAAI/grid_mask_reverse_1024.png")
         adv_patch_cpu.requires_grad_(True)  ####################################
 
         train_loader = torch.utils.data.DataLoader(
@@ -102,6 +102,20 @@ class PatchTrainer(object):
                 "Learning rate": self.config.start_learning_rate
             })
 
+        if self.yolo:
+            prob_extractor = self.config.prob_extractor.cuda()  # For detectors from YOLO series
+        else:
+            prob_extractor = self.config.prob_extractor.cuda()
+            InferenceDetector = self.config.InferenceDetector.cuda()  # For detectors from MMDetection
+        total_variation = TotalVariation().cuda()
+        patch_augmentation = PatchAugmentation().cuda()
+        tv_limit = torch.tensor(0.1).cuda()
+
+        # Cache static tensors to GPU
+        adv_patch_original = adv_patch_cpu_original.cuda()
+        adv_patch_mask = adv_patch_mask_cpu.cuda()
+        adv_patch_reversed_mask = adv_patch_reversed_mask_cpu.cuda()
+
         et0 = time.time()
         for epoch in range(n_epochs):
             ep_det_loss = 0
@@ -111,16 +125,8 @@ class PatchTrainer(object):
             for i_batch, (img_batch, mask_batch) in tqdm(enumerate(train_loader), desc=f'Running epoch {epoch}',
                                                          total=self.epoch_length):
                 iteration = self.epoch_length * epoch + i_batch
-                with autograd.detect_anomaly():
-                    if self.yolo:
-                        prob_extractor = self.config.prob_extractor.cuda()  # For detectors from YOLO series
-                    else:
-                        prob_extractor = self.config.prob_extractor.cuda()
-                        InferenceDetector = self.config.InferenceDetector.cuda()  # For detectors from MMDetection
-                    # total_variation = TotalVariation_ensemble().cuda()
-                    total_variation = TotalVariation().cuda()
-                    patch_augmentation = PatchAugmentation().cuda()
-
+                # with autograd.detect_anomaly():
+                if True:
                     len_batch = len(img_batch)
                     img_batch = img_batch.cuda()
                     # img_batch_show = img_batch[2]
@@ -129,9 +135,6 @@ class PatchTrainer(object):
                     adv_patch = adv_patch_cpu.cuda()
 
                     # Mask operation
-                    adv_patch_original = adv_patch_cpu_original.cuda()
-                    adv_patch_mask = adv_patch_mask_cpu.cuda()
-                    adv_patch_reversed_mask = adv_patch_reversed_mask_cpu.cuda()
                     # adv_patch = adv_patch_update(adv_patch, adv_patch_original, adv_patch_mask, adv_patch_reversed_mask)
 
                     # adv_patch_show = adv_patch
@@ -168,13 +171,13 @@ class PatchTrainer(object):
                     # tv_loss = tv * alpha * 0.0
                     det_loss = torch.max(extracted_prob)
                     w_and_h /= 100.0
-                    loss = det_loss + torch.max(tv_loss, torch.tensor(0.1).cuda()) + w_and_h
-                    # loss = det_loss + torch.max(tv_loss, torch.tensor(0.1).cuda())
+                    loss = det_loss + torch.max(tv_loss, tv_limit) + w_and_h
+                    # loss = det_loss + torch.max(tv_loss, tv_limit)
 
                     ep_det_loss += det_loss.detach().cpu().numpy()
                     ep_tv_loss += tv_loss.detach().cpu().numpy()
                     ep_w_and_h += w_and_h.detach().cpu().numpy()
-                    ep_loss += loss
+                    ep_loss += loss.detach().cpu().item()
 
                     loss.backward()  ##########################################
                     optimizer.step()
@@ -199,7 +202,7 @@ class PatchTrainer(object):
 
                     bt1 = time.time()
                     if self.weight_and_bias:
-                        if i_batch % 50 == 0:  ################################
+                        if i_batch % 1000 == 0:  ################################
                             wandb.log({
                                 # "img_batch_show": wandb.Image(img_batch_show, caption="patch{}".format(iteration)),  # Show adversarial example
                                 # "mask_batch_show": wandb.Image(mask_batch_show, caption="patch{}".format(iteration)),  # Show adversarial example
@@ -215,12 +218,12 @@ class PatchTrainer(object):
                                 "w_and_h": w_and_h,
                                 "total_loss": loss,
                             })
-                    if i_batch % 50 == 0:
-                        del len_batch, img_batch, mask_batch, adv_patch, adv_patch_original, adv_patch_mask, adv_patch_reversed_mask, adv_patch_unsqueezed, adv_patch_expanded, \
-                            adv_patch_resized, adversarial_example, output, extracted_prob, prob_extractor, tv, w_and_h, total_variation, tv_loss, det_loss, loss
-                        if not self.yolo:
-                            del adversarial_example_cpu, data, InferenceDetector
-                        torch.cuda.empty_cache()
+                    # if i_batch % 50 == 0:
+                    #     del len_batch, img_batch, mask_batch, adv_patch, adv_patch_original, adv_patch_mask, adv_patch_reversed_mask, adv_patch_unsqueezed, adv_patch_expanded, \
+                    #         adv_patch_resized, adversarial_example, output, extracted_prob, prob_extractor, tv, w_and_h, total_variation, tv_loss, det_loss, loss
+                    #     if not self.yolo:
+                    #         del adversarial_example_cpu, data, InferenceDetector
+                    #     torch.cuda.empty_cache()
                     if i_batch + 1 >= len(train_loader):
                         print('\n')
             et1 = time.time()
@@ -286,4 +289,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-# CUDA_VISIBLE_DEVICES=4 python train_patch_AAAI.py
+# CUDA_VISIBLE_DEVICES=0 python train.py
