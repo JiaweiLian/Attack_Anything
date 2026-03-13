@@ -9,7 +9,6 @@ import os
 from mmdet.apis import (async_inference_detector, InferenceDetector,
                         init_detector, show_result_pyplot)
 
-
 class BaseConfig(object):
     """
     Default parameters for all config files.
@@ -19,8 +18,11 @@ class BaseConfig(object):
         """
         Set the defaults.
         """
-        self.img_dir = "../Datasets/coco_train2017_extracted_objects"
-        self.mask_dir = "../Datasets/coco_train2017_labels_mask_jpg"
+        self.target_detector = 'faster_rcnn'  # Default target detector ('ssd', 'yolov3', 'swin', etc.)
+        self.attack_mode = 'bba'  # 'tba' for Transferable Background Attack, 'bba' for Box Background Attack
+        self.img_dir = "../Datasets/coco_train2017_images"
+        # self.mask_dir = "../Datasets/coco_train2017_labels_mask_jpg"
+        self.mask_dir = "../Datasets/coco_train2017_mask_box"
         # self.img_dir = "../datasets/AA/car/clean360"
         # self.mask_dir = "../datasets/AA/car/mask360"
         # self.img_dir = "../datasets/AA/mix/clean360"
@@ -157,7 +159,7 @@ class yolov5x(BaseConfig):
         super().__init__()
         self.batch_size = 4
         self.patch_name = 'ObjectOnlyPaper'
-        self.weights_yolov5 = "../models/detectors/yolov5x.pt"
+        self.weights_yolov5 = "../Models/detectors/yolov5x.pt"
         self.data = '../yolov5/data/coco.yaml'
         self.device = select_device('')
         self.model = DetectMultiBackend(self.weights_yolov5,
@@ -179,7 +181,7 @@ class faster_rcnn(BaseConfig):
         self.batch_size = 8
         self.patch_name = 'ObjectOnlyPaper'
         self.config_file = 'configs/faster_rcnn/faster_rcnn_r50_fpn_2x_coco.py'
-        self.checkpoint_file = "/mnt/lianjiawei/mmdetection-master/models/faster_rcnn_r50_fpn_2x_coco.pth"
+        self.checkpoint_file = "../mmdetection-master/models/faster_rcnn_r50_fpn_2x_coco.pth"
         self.device = 'cuda:0'
         self.model = init_detector(self.config_file, self.checkpoint_file, device=self.device)
         self.InferenceDetector = InferenceDetector()
@@ -195,9 +197,10 @@ class ssd(BaseConfig):
         super().__init__()
 
         self.batch_size = 10
+        self.img_size = 320
         self.patch_name = 'ObjectOnlyPaper'
         self.config_file = 'configs/ssd/ssdlite_mobilenetv2_scratch_600e_coco.py'
-        self.checkpoint_file = "../Models/detectors/ssdlite_mobilenetv2_scratch_600e_coco_20210629_110627-974d9307.pth"  # For COCO
+        self.checkpoint_file = "../mmdetection-master/models/ssdlite_mobilenetv2_scratch_600e_coco.pth"  # For COCO
         self.device = 'cuda:0'
         self.model = init_detector(self.config_file, self.checkpoint_file, device=self.device)
         self.InferenceDetector = InferenceDetector()
@@ -214,7 +217,7 @@ class swin(BaseConfig):
 
         self.patch_name = 'ObjectOnlyPaper'
         self.config_file = 'configs/swin/mask_rcnn_swin-t-p4-w7_fpn_fp16_ms-crop-3x_coco.py'
-        self.checkpoint_file = "../models/object_detectors/mask_rcnn_swin-t-p4-w7_fpn_fp16_ms-crop-3x_coco_20210908_165006-90a4008c.pth"  # COCO
+        self.checkpoint_file = "../mmdetection-master/models/mask_rcnn_swin-t-p4-w7_fpn_fp16_ms-crop-3x_coco.pth"  # COCO
         self.batch_size = 6
         self.device = 'cuda:0'
         self.model = init_detector(self.config_file, self.checkpoint_file, device=self.device)
@@ -249,7 +252,7 @@ class retinanet(BaseConfig):
 
         self.patch_name = 'ObjectOnlyPaper'
         self.config_file = "configs/retinanet/retinanet_r50_fpn_2x_coco.py"
-        self.checkpoint_file = "/mnt/lianjiawei/mmdetection-master/models/retinanet_r50_fpn_2x_coco.pth"
+        self.checkpoint_file = "../mmdetection-master/models/retinanet_r50_fpn_2x_coco.pth"
         self.device = 'cuda:0'
         self.model = init_detector(self.config_file, self.checkpoint_file, device=self.device)
         self.InferenceDetector = InferenceDetector()
@@ -385,7 +388,7 @@ class vfnet(BaseConfig):
 
         self.patch_name = 'ObjectOnlyPaper'
         self.config_file = 'configs/vfnet/vfnet_r50_fpn_1x_coco.py'
-        self.checkpoint_file = "/data/lianjiawei/mmdetection-master/work_dirs/vfnet_r50_fpn_1x_coco/epoch_12.pth"
+        self.checkpoint_file = "../Models/detectors/vfnet_r50_fpn_1x_coco_20201027-38db6f58.pth"
         self.device = 'cuda:0'
         self.model = init_detector(self.config_file, self.checkpoint_file, device=self.device)
         self.InferenceDetector = InferenceDetector()

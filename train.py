@@ -161,8 +161,29 @@ class PatchTrainer(object):
                         adversarial_example_cpu = adversarial_example_cpu * 255
 
                         data = InferenceDetector(self.model, adversarial_example_cpu)
-                        data['img'][0] = adversarial_example
-                        output = self.model(return_loss=False, rescale=True, **data)
+
+                        mean_val = [123.675, 116.28, 103.53]
+                        std_val = [58.395, 57.12, 57.375]
+                        if hasattr(self.model, 'cfg') and hasattr(self.model.cfg, 'img_norm_cfg'):
+                            norm_cfg = self.model.cfg.img_norm_cfg
+                            mean_val = norm_cfg.get('mean', mean_val)
+                            std_val = norm_cfg.get('std', std_val)
+                        
+                        mean = torch.tensor(mean_val, device=adversarial_example.device).view(1, 3, 1, 1) / 255.0
+                        std = torch.tensor(std_val, device=adversarial_example.device).view(1, 3, 1, 1) / 255.0
+                        norm_tensor = (adversarial_example - mean) / std
+
+                        data = dict(
+                            img=[norm_tensor],
+                            img_metas=[[dict(
+                                ori_shape=(config.img_size, config.img_size, 3),
+                                img_shape=(config.img_size, config.img_size, 3),
+                                pad_shape=(config.img_size, config.img_size, 3),
+                                scale_factor=np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32),
+                                flip=False,
+                            )]]
+                        )
+                        output = self.model(return_loss=False, rescale=False, **data)
                         # print(output)
                         extracted_prob, w_and_h = prob_extractor(output, self.mode)
 

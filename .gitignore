@@ -2,3 +2,5 @@ __pycache__/
 patches
 references
 wandb
+vis_results
+clean_vis_results
