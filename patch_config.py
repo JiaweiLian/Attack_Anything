@@ -19,10 +19,10 @@ class BaseConfig(object):
         Set the defaults.
         """
         self.target_detector = 'faster_rcnn'  # Default target detector ('ssd', 'yolov3', 'swin', etc.)
-        self.attack_mode = 'bba'  # 'tba' for Transferable Background Attack, 'bba' for Box Background Attack
+        self.attack_mode = None  # Replaced by argparse in train.py and evaluate.py
         self.img_dir = "../Datasets/coco_train2017_images"
-        # self.mask_dir = "../Datasets/coco_train2017_labels_mask_jpg"
-        self.mask_dir = "../Datasets/coco_train2017_mask_box"
+        self.mask_dir = "../Datasets/coco_train2017_labels_mask_jpg"
+        self.box_mask_dir = "../Datasets/coco_train2017_mask_box"
         # self.img_dir = "../datasets/AA/car/clean360"
         # self.mask_dir = "../datasets/AA/car/mask360"
         # self.img_dir = "../datasets/AA/mix/clean360"

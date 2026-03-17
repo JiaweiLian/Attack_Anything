@@ -170,7 +170,7 @@ class MeanProbExtractor_yolov5(nn.Module):
                 conf_addition += mean_conf
             conf_addition /= len_output
             w_and_h /= len_output
-        return conf_addition, w_and_h, output[2]  # new loss
+        return conf_addition, w_and_h, output  # new loss
 
 
 class MeanProbExtractor_mmdetection(nn.Module):
@@ -294,6 +294,28 @@ class TotalVariation_ensemble(nn.Module):
 
         return tv / torch.numel(adv_patch)  # torch.numel(): count the total number of elements in a tensor
 
+
+
+class LaplacianSmoothness(nn.Module):
+    """Laplacian Smoothness: Calculates the smoothness of a patch using the Laplacian operator.
+    Serves as an alternative "plausible integration strategy" beyond vanilla TV.
+    """
+    def __init__(self):
+        super(LaplacianSmoothness, self).__init__()
+        # 3x3 Laplacian filter format: [[0, 1, 0], [1, -4, 1], [0, 1, 0]]
+        self.laplacian_kernel = torch.tensor([[[[0., 1., 0.],
+                                                [1., -4., 1.],
+                                                [0., 1., 0.]]]]).cuda()
+        # Shape [3, 1, 3, 3] for grouping=3 (RGB channels independent)
+        self.laplacian_kernel = self.laplacian_kernel.repeat(3, 1, 1, 1)
+
+    def forward(self, adv_patch):
+        # adv_patch shape is [3, H, W] but F.conv2d expects [B, C, H, W]
+        if adv_patch.dim() == 3:
+            adv_patch = adv_patch.unsqueeze(0)
+            
+        laplacian = F.conv2d(adv_patch, self.laplacian_kernel, padding=1, groups=3)
+        return torch.sum(torch.abs(laplacian)) / torch.numel(adv_patch)
 
 class TricolorCamouflage(nn.Module):
     """TricolorCamouflage: calculates the camouflage loss of a patch.

@@ -15,6 +15,45 @@ from train import adv_patch_update, PatchTrainer
 
 warnings.filterwarnings('ignore')
 
+def apply_viewpoint_change(patch_tensor, angle):
+    """Applies a perspective transform to the patch to simulate viewing from a side angle.
+    Returns the transformed patch and a binary alpha mask indicating valid pixels."""
+    if angle == 0:
+        return patch_tensor, torch.ones((1, 1, patch_tensor.shape[-2], patch_tensor.shape[-1]), device=patch_tensor.device)
+        
+    import torchvision.transforms.functional as TF
+    import math
+    
+    _, _, H, W = patch_tensor.shape
+    alpha_mask = torch.ones((1, 1, H, W), device=patch_tensor.device)
+    
+    startpoints = [[0, 0], [W - 1, 0], [W - 1, H - 1], [0, H - 1]]
+    
+    angle_rad = math.radians(abs(angle))
+    shrink_h = int((H / 2) * math.sin(angle_rad))
+    shrink_w = int((W / 2) * (1 - math.cos(angle_rad)))
+    
+    if angle > 0: 
+        endpoints = [
+            [0 + shrink_w, 0 + shrink_h], 
+            [W - 1, 0], 
+            [W - 1, H - 1], 
+            [0 + shrink_w, H - 1 - shrink_h]
+        ]
+    else:
+        endpoints = [
+            [0, 0], 
+            [W - 1 - shrink_w, 0 + shrink_h], 
+            [W - 1 - shrink_w, H - 1 - shrink_h], 
+            [0, H - 1]
+        ]
+        
+    patch_t = TF.perspective(patch_tensor, startpoints, endpoints)
+    alpha_t = TF.perspective(alpha_mask, startpoints, endpoints)
+    
+    alpha_t = (alpha_t > 0.5).float()
+    return patch_t, alpha_t
+
 def load_patch(patch_path, config):
     """Load and transform the trained patch."""
     if not os.path.exists(patch_path):
@@ -64,7 +103,7 @@ def get_mmdet_predictions(model, img_tensor, config, InferenceDetector):
     output = model(return_loss=False, rescale=False, **data)
     return output
 
-def evaluate_map(mode, patch_path=None, attack_mode_override=None, split='val'):
+def evaluate_map(mode, patch_path=None, attack_mode_override=None, split='val', mask_noise_type='none', mask_noise_val=0, viewpoint=0):
     """
     Evaluate the mAP of a given model and patch on the dataset.
     """
@@ -149,16 +188,66 @@ def evaluate_map(mode, patch_path=None, attack_mode_override=None, split='val'):
                 if x2 > x1 and y2 > y1:
                     mask_batch[0, 0, y1:y2, x1:x2] = 1.0 # 1 inside box
             
+            # Apply experimental noise to mask for evaluation sensitivity analysis
+            if mask_noise_type != 'none' and mask_noise_val > 0:
+                mask_np = mask_batch[0, 0].cpu().numpy().astype(np.uint8) * 255
+                if mask_noise_type in ['dilate', 'erode']:
+                    import cv2
+                    kernel_size = 1 + 2 * mask_noise_val
+                    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+                    if mask_noise_type == 'dilate':
+                        mask_np = cv2.dilate(mask_np, kernel, iterations=1)
+                    else:
+                        mask_np = cv2.erode(mask_np, kernel, iterations=1)
+                elif mask_noise_type == 'shift':
+                    import cv2
+                    M = np.float32([[1, 0, mask_noise_val], [0, 1, mask_noise_val]])
+                    mask_np = cv2.warpAffine(mask_np, M, (config.img_size, config.img_size))
+                elif mask_noise_type == 'flip':
+                    flip_mask = np.random.rand(*mask_np.shape) < (mask_noise_val / 100.0)
+                    mask_np = np.logical_xor(mask_np > 0, flip_mask).astype(np.uint8) * 255
+                mask_batch[0, 0] = torch.from_numpy(mask_np).cuda().float() / 255.0
+            
             adv_patch_resized = F.interpolate(adv_patch, size=(config.img_size, config.img_size))
             
-            if getattr(config, 'attack_mode', 'tba') == 'bba':
+            # Apply viewpoint transformation
+            adv_patch_resized, alpha_vp = apply_viewpoint_change(adv_patch_resized, viewpoint)
+            
+            attack_mode = getattr(config, 'attack_mode', 'tba')
+            if attack_mode == 'bba':
                 H_img, W_img = config.img_size, config.img_size
                 strip_mask = torch.zeros_like(mask_batch)
                 strip_mask[:, :, H_img // 4 : 3 * H_img // 4, :] = 1.0
-                bba_mask = strip_mask * (1.0 - mask_batch)
+                bba_mask = strip_mask * (1.0 - mask_batch) * alpha_vp
                 input_tensor = adv_patch_update(adv_patch_resized, img_tensor, 1.0 - bba_mask, bba_mask)
+            elif attack_mode == 'ccba':
+                H_img, W_img = config.img_size, config.img_size
+                y_grid, x_grid = torch.meshgrid(torch.arange(H_img), torch.arange(W_img))
+                dist = torch.sqrt((x_grid - W_img//2)**2 + (y_grid - H_img//2)**2).to(img_tensor.device)
+                ring_width = 60 # Coarser rings conforming to characteristic size in Reference 1
+                
+                # Calculate unique index for each ring
+                ring_idx = (dist / ring_width).long()
+                max_rings = int((W_img / 2) / ring_width) + 2
+                
+                b_size = adv_patch_resized.size(0)
+                radial_patch = torch.zeros_like(adv_patch_resized)
+                for r in range(max_rings):
+                    mask_r = (ring_idx == r).unsqueeze(0).unsqueeze(0).float()
+                    count = mask_r.sum()
+                    if count > 0:
+                        sum_color = (adv_patch_resized * mask_r).sum(dim=(2, 3), keepdim=True)
+                        mean_color = sum_color / count
+                        radial_patch += mean_color * mask_r
+
+                # Limit to maximum diameter = img_size (e.g., 1024)
+                valid_ring_mask = (dist <= W_img/2).float()
+                ccba_mask = valid_ring_mask.unsqueeze(0).unsqueeze(0).expand_as(mask_batch) * (1.0 - mask_batch) * alpha_vp
+                
+                input_tensor = adv_patch_update(radial_patch, img_tensor, 1.0 - ccba_mask, ccba_mask)
             else: # tba
-                input_tensor = adv_patch_update(adv_patch_resized, img_tensor, mask_batch, 1.0 - mask_batch)
+                tba_mask = (1.0 - mask_batch) * alpha_vp
+                input_tensor = adv_patch_update(adv_patch_resized, img_tensor, 1.0 - tba_mask, tba_mask)
         else:
             input_tensor = img_tensor
 
@@ -244,9 +333,12 @@ def evaluate_map(mode, patch_path=None, attack_mode_override=None, split='val'):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate Adversarial Patch mAP')
-    parser.add_argument('--model', type=str, default="foveabox", help='Target detector mode (e.g. ssd, yolov5m).')
-    parser.add_argument('--patch_path', type=str, default="patches/patch_NN_response/bba_yolov5x.png", help='Path to the trained adversarial patch image. If None, evaluates clean image.')
-    parser.add_argument('--attack_mode', type=str, default="bba", choices=['tba', 'bba', 'clean'], help='Override the attack mode set in patch_config (tba or bba).')
+    parser.add_argument('--model', type=str, default="yolov5x", help='Target detector mode (e.g. ssd, yolov5m).')
+    parser.add_argument('--patch_path', type=str, default="patches/patch_NN_response/tba_yolov5x.png", help='Path to the trained adversarial patch image. If None, evaluates clean image.')
+    parser.add_argument('--attack_mode', type=str, default="tba", choices=['tba', 'bba', 'ccba', 'clean'], help='Override the attack mode set in patch_config (tba, bba, or ccba).')
+    parser.add_argument('--mask_noise_type', type=str, default='none', choices=['none', 'dilate', 'erode', 'flip', 'shift'], help='Type of noise applied to the mask at evaluation time.')
+    parser.add_argument('--mask_noise_val', type=int, default=0, help='Value for the mask noise (e.g. kernel size for dilation/erosion, or pixel shift, or flip percentage).')
+    parser.add_argument('--viewpoint', type=int, default=0, help='Viewpoint angle in degrees (e.g., 45 for side view).')
     args = parser.parse_args()
     
     if args.model is None:
@@ -256,4 +348,10 @@ if __name__ == '__main__':
     if args.attack_mode is not None:
         config.attack_mode = args.attack_mode
         
-    evaluate_map(args.model, args.patch_path, attack_mode_override=args.attack_mode)
+    evaluate_map(args.model, args.patch_path, attack_mode_override=args.attack_mode, 
+                 mask_noise_type=args.mask_noise_type, mask_noise_val=args.mask_noise_val,
+                 viewpoint=args.viewpoint)
+
+# CUDA_VISIBLE_DEVICES=0 python evaluate.py --model yolov5x --attack_mode tba --patch_path patches/patch_NN_response/tba_yolov5x.png --mask_noise_type dilate --mask_noise_val 32
+
+# CUDA_VISIBLE_DEVICES=2 python evaluate.py --model yolov5x --attack_mode tba --patch_path patches/patch_NN_response/tba_yolov5x_tood_tv_ensemble.png --viewpoint 4

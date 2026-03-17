@@ -4,3 +4,7 @@ references
 wandb
 vis_results
 clean_vis_results
+logs
+debug
+visual_results
+debug_scripts

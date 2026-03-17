@@ -1,99 +1,80 @@
-# Attack_Anything: A Framework for Adversarial Attacks on Object Detection Models
+# Attack_Anything: A Universal Framework for Adversarial Patch Attacks on Object Detectors
 
-This repository contains the official implementation of the paper **Attack_Anything**, a comprehensive framework for generating robust adversarial examples to attack various object detection models. Our framework is designed to be flexible, extensible, and easy to use, supporting a wide range of state-of-the-art object detectors.
+This repository contains the official implementation of **Attack_Anything**, a comprehensive framework for generating robust adversarial patches to attack various state-of-the-art object detection models. The framework supports powerful ensemble attacks combining different architectures (e.g. YOLO series, MMDetection models like TOOD).
 
-## Introduction
-
-Recent advancements in deep learning have led to remarkable progress in object detection. However, the vulnerability of these models to adversarial attacks raises significant security concerns. This project provides a framework to systematically study and evaluate the robustness of object detection models against various adversarial attack methods.
-
-"Attack_Anything" allows for the generation of adversarial patches and perturbations that can cause object detectors to fail in identifying objects, misclassify them, or produce incorrect bounding boxes.
-
-## Key Features
-
-*   **Wide Range of Supported Models**: Supports numerous object detection architectures, including YOLOv3, YOLOv5, Faster R-CNN, RetinaNet, DETR, and many more through integration with MMDetection.
-*   **Multiple Attack Algorithms**: Implementation of various adversarial attack techniques.
-*   **Customizable Configurations**: Easily configure attacks, models, and datasets through a comprehensive configuration system.
-*   **Extensible Framework**: Designed to be easily extended with new models, datasets, and attack methods.
-*   **Evaluation Tools**: Tools for evaluating the performance of attacks and the robustness of models.
+## Table of Contents
+- [Installation](#installation)
+- [Repository Structure](#repository-structure)
+- [Usage: Training](#usage-training)
+- [Usage: Evaluation](#usage-evaluation)
+- [Usage: Visualization](#usage-visualization)
 
 ## Installation
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/JiaweiLian/Attack_Anything.git
-    cd Attack_Anything
-    ```
+We provide an `environment.yml` file to exactly reproduce the Python 3.6 conda environment used for our experiments.
 
-2.  **Create a Conda environment and activate it:**
-    ```bash
-    conda create -n attack_anything python=3.8 -y
-    conda activate attack_anything
-    ```
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/JiaweiLian/Attack_Anything.git
+   cd Attack_Anything
+   ```
 
-3.  **Install dependencies:**
-    Install PyTorch and torchvision following the [official instructions](https://pytorch.org/).
-    ```bash
-    # Example for CUDA 11.3
-    pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 -f https://download.pytorch.org/whl/torch_stable.html
-    ```
-    Install other dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-    *(Note: A `requirements.txt` file should be created to list all dependencies such as `mmcv`, `mmdet`, `numpy`, etc.)*
+2. **Create the Conda environment:**
+   ```bash
+   conda env create -f environment.yml
+   conda activate py3.6
+   ```
 
-## Usage
+## Repository Structure
 
-### Training
+The core codebase has been simplified to make the attack pipeline clear, with debugging and test scripts neatly organized:
 
-To train a model, use the `train.py` script with a specific model configuration file.
+- `train.py`: Core training script for optimizing adversarial patches (supports single or ensemble models).
+- `evaluate.py`: Evaluation pipeline on COCO metrics (mAP validation), with physical simulation tools like viewpoint transformations.
+- `visualize.py`: Renders adversarial patches onto images, supporting perspective transformations.
+- `load_data.py`: Handles dataset loading, bounds calculations, and penalty losses (e.g. Total Variation, Laplacian Smoothness).
+- `utils.py`: Contains common utilities for bounding box manipulation and generic functions.
+- `debug_scripts/`: A dedicated folder containing various testing, debugging, and visualization exploration scripts (`test_*.py`, `fix_*.py`, etc.) for easy development.
 
+## Usage: Training
+
+You can train an adversarial patch targeting a single model or an ensemble of models. The framework offers multiple structural and stealth strategies such as Grid Expansion (`--grid_size`) and smoothness penalties (`--smoothness_strategy`).
+
+**Example: Train an ensemble patch (YOLOv5x and TOOD) with TBA mode:**
 ```bash
-python train.py --config configs/yolo/yolov3.yaml
+CUDA_VISIBLE_DEVICES=0 python train.py \
+    --ensemble yolov5x,tood \
+    --attack_mode tba \
+    --grid_size 8 \
+    --smoothness_strategy tv_ensemble
 ```
 
-### Generating Adversarial Patches
+## Usage: Evaluation
 
-To generate an adversarial patch, you can use a script like `generate_patch.py` (assuming one exists or will be created) and specify the attack configuration.
+We evaluate the generated patches robustness across multiple scenarios, including simulating real-world physical dynamics like camera viewpoint shifts via perspective transforms.
 
+**Example: Evaluate model robustness with a 32-degree side-angle viewpoint shift:**
 ```bash
-python generate_patch.py --config configs/attacks/patch_attack.yaml
+CUDA_VISIBLE_DEVICES=0 python evaluate.py \
+    --model yolov5x \
+    --attack_mode tba \
+    --patch_path patches/patch_NN_response/tba_yolov5x_tood_tv_laplacian.png \
+    --viewpoint 32
 ```
 
-### Evaluating Attacks
+## Usage: Visualization
 
-To evaluate the effectiveness of an attack on a dataset, you can run an evaluation script.
+To intuitively observe the patch's effect and its geometric transformations on standard images, use `visualize.py`. Results are automatically saved into independent folders within `visual_results/` to prevent overwriting.
 
+**Example: Generate 100 visualizations applying a 32-degree perspective distortion:**
 ```bash
-python evaluate.py --model_config configs/yolo/yolov3.yaml --attack_config configs/attacks/patch_attack.yaml
+CUDA_VISIBLE_DEVICES=0 python visualize.py \
+    --model yolov5x \
+    --attack_mode tba \
+    --patch_path patches/patch_NN_response/tba_yolov5x_tood_tv_laplacian.png \
+    --num_images 100 \
+    --viewpoint 32
 ```
-
-## Supported Models
-
-Our framework supports a wide variety of models from the MMDetection toolbox and other sources. Some of the supported models include:
-
-*   Faster R-CNN
-*   RetinaNet
-*   Mask R-CNN
-*   Cascade R-CNN
-*   SSD
-*   YOLOv3, YOLOv5, YOLOX
-*   DETR
-*   And many more...
-
-Please refer to the `configs` directory for a complete list of supported models and their configurations.
-
-## Contribution
-
-We welcome contributions from the community. If you would like to contribute to this project, please follow these steps:
-
-1.  Fork the repository.
-2.  Create a new branch (`git checkout -b feature/your-feature`).
-3.  Commit your changes (`git commit -am 'Add some feature'`).
-4.  Push to the branch (`git push origin feature/your-feature`).
-5.  Create a new Pull Request.
-
-Please make sure to write tests for your new features and follow the existing code style.
 
 ## License
 
